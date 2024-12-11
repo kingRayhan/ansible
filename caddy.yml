@@ -11,8 +11,6 @@
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/deb.debian.net.repo' | tee /etc/apt/sources.list.d/caddy-stable.list
         apt update
         apt install -y caddy
-      args:
-        warn: false
 
     - name: Start and enable Caddy service
       service:
