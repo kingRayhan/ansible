@@ -11,14 +11,30 @@
         curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/deb.debian.net.repo' | tee /etc/apt/sources.list.d/caddy-stable.list
         apt update
         apt install -y caddy
+      tags:
+        - install
+        - caddy
+        - fresh_install
 
     - name: Start and enable Caddy service
       service:
         name: caddy
         state: started
         enabled: yes
+      tags:
+        - fresh_install
+        - start_service
+
+    - name: Stop and disable Caddy service
+      service:
+        name: caddy
+        state: stopped
+        enabled: no
+      tags:
+        - stop_service
 
     - name: Configure reverse proxy for example.com
+      become: yes
       copy:
         content: |
           example.com {
@@ -28,8 +44,16 @@
               reverse_proxy localhost:3001
           }
         dest: /etc/caddy/Caddyfile
+        owner: root
+        group: root
+        mode: '0644'
+        notify:
+        - reload_caddy_service
+        tags:
+          - fresh_install
+          - configure_reverse_proxy
   handlers:
-    - name: Reload Caddy
+    - name: reload_caddy_service
       service:
         name: caddy
         state: reloaded
