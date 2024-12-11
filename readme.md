@@ -14,6 +14,12 @@ Install Caddy and configure reverse proxy for example.com and api.example.com
 ansible-playbook -i inventory.cfg caddy.yml --tags fresh_install
 ```
 
+Start and enable Caddy service
+
+```bash
+ansible-playbook -i inventory.cfg caddy.yml --tags start_service
+```
+
 Stop and disable Caddy service
 
 ```bash
@@ -26,8 +32,28 @@ Configure reverse proxy for example.com
 ansible-playbook -i inventory.cfg caddy.yml --tags configure_reverse_proxy
 ```
 
-### Install Docker
+# Docker
+
+Install and start Docker service
 
 ```bash
-ansible-playbook -i inventory.cfg docker.yml
+ansible-playbook -i inventory.cfg docker.yml --tags fresh_install
+```
+
+Stop and disable Docker service
+
+```bash
+ansible-playbook -i inventory.cfg docker.yml --tags stop_service
+```
+
+Restart Docker service
+
+```bash
+ansible-playbook -i inventory.cfg docker.yml --tags restart_service
+```
+
+Unstall Docker
+
+```bash
+ansible-playbook -i inventory.cfg docker.yml --tags uninstall
 ```

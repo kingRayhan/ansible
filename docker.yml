@@ -12,9 +12,56 @@
         echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
         apt-get update
         apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+      tags:
+        - install
+        - fresh_install
 
     - name: Start and enable Docker service
       service:
         name: docker
         state: started
         enabled: yes
+      tags:
+        - start_service
+        - fresh_install
+
+    - name: Stop and disable Docker service
+      service:
+        name: docker
+        state: stopped
+        enabled: no
+      tags:
+        - stop_service
+
+    - name: Restart Docker service
+      service:
+        name: docker
+        state: restarted
+      tags:
+        - restart_service
+
+    - name: Unstall Docker
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: absent
+      tags:
+        - uninstall
+    - name: Remove Docker-related directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /var/lib/docker
+        - /etc/docker
+        - /etc/systemd/system/docker.service.d
+        - /var/run/docker.sock
+        - /usr/local/bin/docker-compose
+      become: yes
+      tags:
+        - uninstall_docker_cleanup
+        - uninstall
