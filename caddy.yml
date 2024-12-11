@@ -24,17 +24,10 @@
           example.com {
               reverse_proxy localhost:3000
           }
-        dest: /etc/caddy/Caddyfile
-
-    - name: Configure reverse proxy for api.example.com
-      lineinfile:
-        path: /etc/caddy/Caddyfile
-        line: |
           api.example.com {
-              reverse_proxy localhost:4000
+              reverse_proxy localhost:3001
           }
-        insertafter: "example.com {"
-
+        dest: /etc/caddy/Caddyfile
   handlers:
     - name: Reload Caddy
       service:
