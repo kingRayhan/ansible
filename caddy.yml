@@ -1,0 +1,44 @@
+---
+- name: Setup Caddy and Reverse Proxy
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Install Caddy
+      shell: |
+        apt install -y debian-keyring debian-archive-keyring apt-transport-https
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/deb.debian.net.repo' | tee /etc/apt/sources.list.d/caddy-stable.list
+        apt update
+        apt install -y caddy
+      args:
+        warn: false
+
+    - name: Start and enable Caddy service
+      service:
+        name: caddy
+        state: started
+        enabled: yes
+
+    - name: Configure reverse proxy for example.com
+      copy:
+        content: |
+          example.com {
+              reverse_proxy localhost:3000
+          }
+        dest: /etc/caddy/Caddyfile
+
+    - name: Configure reverse proxy for api.example.com
+      lineinfile:
+        path: /etc/caddy/Caddyfile
+        line: |
+          api.example.com {
+              reverse_proxy localhost:4000
+          }
+        insertafter: "example.com {"
+
+  handlers:
+    - name: Reload Caddy
+      service:
+        name: caddy
+        state: reloaded
