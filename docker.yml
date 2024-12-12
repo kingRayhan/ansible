@@ -1,67 +1,108 @@
 ---
-- name: Install Docker
+- name: Docker Installation and Uninstallation
   hosts: all
-  become: yes
-  tasks:
-    - name: Install Docker
-      shell: |
-        apt-get update
-        apt-get install -y ca-certificates curl gnupg
-        mkdir -p /etc/apt/keyrings
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-        apt-get update
-        apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-      tags:
-        - install
-        - fresh_install
+  become: true
+  vars:
+    docker_users:
+      - "{{ ansible_user }}"
 
-    - name: Start and enable Docker service
+  tasks:
+    # Installation tasks
+    - name: Remove existing Docker installations
+      tags: [install, fresh_install]
+      shell: |
+        for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc; do sudo apt-get remove $pkg; done
+      ignore_errors: yes
+
+    - name: Download and execute Docker installation script
+      tags: [install, fresh_install]
+      shell: |
+        curl -fsSL https://get.docker.com -o get-docker.sh
+        sh get-docker.sh
+      args:
+        creates: /usr/bin/docker
+
+    - name: Ensure Docker service is started and enabled
+      tags: [install, fresh_install]
       service:
         name: docker
         state: started
         enabled: yes
-      tags:
-        - start_service
-        - fresh_install
 
-    - name: Stop and disable Docker service
+    - name: Add users to docker group
+      tags: fresh_install
+      user:
+        name: "{{ item }}"
+        groups: docker
+        append: yes
+      loop: "{{ docker_users }}"
+
+    # Service control tasks
+    - name: Stop Docker service
+      tags: [uninstall, service_stop]
       service:
         name: docker
         state: stopped
-        enabled: no
-      tags:
-        - stop_service
+      ignore_errors: yes
 
-    - name: Restart Docker service
+    - name: Disable Docker service
+      tags: [uninstall, service_stop]
       service:
         name: docker
-        state: restarted
-      tags:
-        - restart_service
+        enabled: no
+      ignore_errors: yes
 
-    - name: Unstall Docker
-      apt:
-        name:
-          - docker-ce
-          - docker-ce-cli
-          - containerd.io
-          - docker-buildx-plugin
-          - docker-compose-plugin
-        state: absent
-      tags:
-        - uninstall
-    - name: Remove Docker-related directories
+    # Uninstallation tasks
+    - name: Stop all running containers
+      tags: [uninstall]
+      shell: docker stop $(docker ps -aq) || true
+      ignore_errors: yes
+
+    - name: Remove all containers
+      tags: [uninstall]
+      shell: docker rm $(docker ps -aq) || true
+      ignore_errors: yes
+
+    - name: Remove all Docker images
+      tags: [uninstall]
+      shell: docker rmi $(docker images -q) || true
+      ignore_errors: yes
+
+    - name: Remove all Docker volumes
+      tags: [uninstall]
+      shell: docker volume rm $(docker volume ls -q) || true
+      ignore_errors: yes
+
+    - name: Uninstall Docker packages
+      tags: [uninstall]
+      shell: |
+        for pkg in docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin docker-ce-rootless-extras; do apt-get remove --purge -y $pkg; done
+      ignore_errors: yes
+
+    - name: Remove Docker configuration and data
+      tags: [uninstall]
       file:
         path: "{{ item }}"
         state: absent
-      with_items:
+      loop:
         - /var/lib/docker
         - /etc/docker
-        - /etc/systemd/system/docker.service.d
-        - /var/run/docker.sock
+        - /etc/apt/sources.list.d/docker.list
+        - /etc/apt/sources.list.d/docker.list.save
+        - /usr/share/keyrings/docker-archive-keyring.gpg
+        - /etc/apt/keyrings/docker.gpg
         - /usr/local/bin/docker-compose
-      become: yes
-      tags:
-        - uninstall_docker_cleanup
-        - uninstall
+        - ~/get-docker.sh
+
+    - name: Remove Docker group
+      tags: [uninstall]
+      group:
+        name: docker
+        state: absent
+      ignore_errors: yes
+
+    - name: Update apt cache after uninstall
+      tags: [uninstall]
+      apt:
+        update_cache: yes
+      ignore_errors: yes

@@ -1,59 +1,168 @@
 ---
-- name: Setup Caddy and Reverse Proxy
+- name: Caddy Server Management
   hosts: all
-  become: yes
+  become: true
+  vars:
+    # Customize these variables per your needs
+    domain_name: example.com
+    proxy_upstream: "http://localhost:3000" # Default upstream server
+    caddy_config_dir: /etc/caddy
+    caddy_email: your@email.com # For Let's Encrypt notifications
+    domain_configs:
+      - domain: example1.com
+        upstream: "localhost:3000"
+        # extra_headers:
+        #   - "X-Custom-Header1: value1"
+      # - domain: example2.com
+      #   upstream: "localhost:4000"
+      #   path_prefix: "/api" # Optional path prefix
+      # - domain: example3.com
+      #   upstream: "localhost:5000"
+      #   extra_locations:
+      #     - path: "/static"
+      #       upstream: "localhost:8080"
+      # - domain: subapp.example.com
+      #   upstream: "localhost:6000"
+      #   websocket: true # Enable WebSocket support
 
   tasks:
-    - name: Install Caddy
-      shell: |
-        apt install -y debian-keyring debian-archive-keyring apt-transport-https
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
-        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/deb.debian.net.repo' | tee /etc/apt/sources.list.d/caddy-stable.list
-        apt update
-        apt install -y caddy
-      tags:
-        - install
-        - caddy
-        - fresh_install
+    # Installation tasks
+    - name: Install required packages
+      tags: [install, fresh_install]
+      apt:
+        name:
+          - debian-keyring
+          - debian-archive-keyring
+          - apt-transport-https
+          - curl
+        state: present
+        update_cache: yes
 
+    - name: Download Caddy gpg key
+      tags: [install, fresh_install]
+      shell: |
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+
+    - name: Add Caddy repository
+      tags: [install, fresh_install]
+      shell: |
+        curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+
+    - name: Install Caddy
+      tags: [install, fresh_install]
+      apt:
+        name: caddy
+        state: present
+        update_cache: yes
+
+    # Configuration tasks
+    - name: Create Caddy configuration directory
+      tags: [install, fresh_install, config]
+      file:
+        path: "{{ caddy_config_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Configure Caddy with multiple domains and health checks
+      tags: [install, fresh_install, config]
+      copy:
+        content: |
+          {
+              email {{ caddy_email }}
+          }
+
+          {% for config in domain_configs %}
+          {{ config.domain }} {
+              # Health check endpoint
+              handle /health {
+                  respond "OK" 200
+              }
+
+              handle /* {
+                  reverse_proxy {{ config.upstream }} {
+                      header_up Host {upstream_hostport}
+                      header_up X-Real-IP {remote_host}
+                      header_up X-Forwarded-For {remote_host}
+                      header_up X-Forwarded-Proto {scheme}
+                  }
+                  {% if config.extra_headers is defined %}
+                  {% for header in config.extra_headers %}
+                  header {{ header.name }} "{{ header.value }}"
+                  {% endfor %}
+                  {% endif %}
+              }
+
+              # log {
+              #     output file /var/log/caddy/{{ config.domain }}.access.log
+              #     format json
+              # }
+          }
+          {% endfor %}
+        dest: "{{ caddy_config_dir }}/Caddyfile"
+        mode: "0644"
+      notify: reload caddy
+
+    - name: Create log directory
+      tags: [install, fresh_install]
+      file:
+        path: /var/log/caddy
+        state: directory
+        mode: "0755"
+        owner: caddy
+        group: caddy
+
+    # Service management tasks
     - name: Start and enable Caddy service
+      tags: [install, fresh_install, start]
       service:
         name: caddy
         state: started
         enabled: yes
-      tags:
-        - fresh_install
-        - start_service
 
-    - name: Stop and disable Caddy service
+    - name: Stop Caddy service
+      tags: [service_stop, uninstall]
       service:
         name: caddy
         state: stopped
         enabled: no
-      tags:
-        - stop_service
+      ignore_errors: yes
 
-    - name: Configure reverse proxy for example.com
-      become: yes
-      copy:
-        content: |
-          example.com {
-              reverse_proxy localhost:3000
-          }
-          api.example.com {
-              reverse_proxy localhost:3001
-          }
-        dest: /etc/caddy/Caddyfile
-        owner: root
-        group: root
-        mode: '0644'
-        notify:
-        - reload_caddy_service
-        tags:
-          - fresh_install
-          - configure_reverse_proxy
+    # Uninstallation tasks
+    - name: Remove Caddy package
+      tags: [uninstall]
+      apt:
+        name: caddy
+        state: absent
+        purge: yes
+
+    - name: Remove Caddy files and configurations
+      tags: [uninstall]
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ caddy_config_dir }}"
+        - /var/log/caddy
+        - /etc/apt/sources.list.d/caddy-stable.list
+        - /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+        - /var/lib/caddy
+      ignore_errors: yes
+
+    - name: Remove Caddy user and group
+      tags: [uninstall]
+      user:
+        name: caddy
+        state: absent
+        remove: yes
+      ignore_errors: yes
+
+    - name: Update apt cache after uninstall
+      tags: [uninstall]
+      apt:
+        update_cache: yes
+
   handlers:
-    - name: reload_caddy_service
+    - name: reload caddy
       service:
         name: caddy
         state: reloaded

@@ -3,57 +3,40 @@
 ### Ping all hosts
 
 ```bash
-ansible -i inventory.cfg all -m ping
+ansible -i inventory.yml all -m ping
 ```
 
-### Caddy
+# Caddy
 
-Install Caddy and configure reverse proxy for example.com and api.example.com
-
-```bash
-ansible-playbook -i inventory.cfg caddy.yml --tags fresh_install
 ```
+# For full installation with user setup
+ansible-playbook -i inventory.yml caddy.yml --tags "fresh_install"
 
-Start and enable Caddy service
+# For installation and configuration
+ansible-playbook -i inventory.yml caddy.yml --tags "install"
 
-```bash
-ansible-playbook -i inventory.cfg caddy.yml --tags start_service
-```
+# To just update configuration
+ansible-playbook -i inventory.yml caddy.yml --tags "config"
 
-Stop and disable Caddy service
+# To stop the service
+ansible-playbook -i inventory.yml caddy.yml --tags "service_stop"
 
-```bash
-ansible-playbook -i inventory.cfg caddy.yml --tags stop_service
-```
-
-Configure reverse proxy for example.com
-
-```bash
-ansible-playbook -i inventory.cfg caddy.yml --tags configure_reverse_proxy
+# For complete uninstallation
+ansible-playbook -i inventory.yml caddy.yml --tags "uninstall"
 ```
 
 # Docker
 
-Install and start Docker service
-
-```bash
-ansible-playbook -i inventory.cfg docker.yml --tags fresh_install
 ```
+# For basic installation
+ansible-playbook -i inventory.yml playbook.yml --tags "install"
 
-Stop and disable Docker service
+# For full installation with user setup
+ansible-playbook -i inventory.yml playbook.yml --tags "fresh_install"
 
-```bash
-ansible-playbook -i inventory.cfg docker.yml --tags stop_service
-```
+# Just to stop services
+ansible-playbook -i inventory.yml playbook.yml --tags "service_stop"
 
-Restart Docker service
-
-```bash
-ansible-playbook -i inventory.cfg docker.yml --tags restart_service
-```
-
-Unstall Docker
-
-```bash
-ansible-playbook -i inventory.cfg docker.yml --tags uninstall
+# For complete uninstallation (includes stopping services)
+ansible-playbook -i inventory.yml playbook.yml --tags "uninstall"
 ```
